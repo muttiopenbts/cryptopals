@@ -3,6 +3,7 @@ from pwn import *
 from hexdump import *
 import binascii
 import enchant
+import sys
 
 def get_xor_message(message, xor_key):
     """ Retrieve an xor key from two messages.
@@ -29,17 +30,20 @@ Somewhat reliable.
 Returns a dictionary containing score, message, key
 '''
 def crack_xor_message_dictionary(message):
-    cracked_message = {}
+    cracked_message = {'score':0, 'message':'', 'key':''}
     best_score = 0
     dictionary_eng = enchant.Dict("en_US")
+    print message
+
+    # Bruteforce entire message trying every possible byte option
     for key in range(0x00, 0xff):
         result = xor(unhex(message),unhex(str(key)),cut='max')
         score = 0
-
         #Tokenize message
         for extracted_word in result.split():
             # Skip enchant errors when words are garbage
             try:
+                # Check word is alph numeric to prevent enchant errors.
                 if extracted_word.isalnum() and dictionary_eng.check(extracted_word):
                     # Start counting english words
                     score+=1
@@ -49,6 +53,7 @@ def crack_xor_message_dictionary(message):
         if score > best_score:
             cracked_message = {'score':score, 'message':result, 'key':key}
             best_score = score
+
     return cracked_message
 
 '''
@@ -71,7 +76,17 @@ def crack_xor_message(message):
     return cracked_message
 
 if __name__ == '__main__':
-    challenge = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736"
-
-    cracked_message = crack_xor_message_dictionary(challenge)
-    print cracked_message
+    best_score = {'score':0, 'message':'', 'key':''} # Keep score of most likely encrypted message line
+    # Read command line parameter specifying challenge file
+    challenge_filename = sys.argv[1]
+    print "Opening challenge file {}".format(challenge_filename)
+    # Open challenge file which should contain bunch of hex encoded lines
+    with open(challenge_filename, 'r') as challenge:
+        for line in  challenge:
+            #Bruteforce crack the encoded line
+            cracked_message = crack_xor_message_dictionary(line.rstrip())
+            # What score (frequency) of english words contained
+            if cracked_message['score'] > best_score['score']:
+                # Keep record of best score
+                best_score = cracked_message
+    print best_score
