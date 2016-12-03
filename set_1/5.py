@@ -81,7 +81,6 @@ if __name__ == '__main__':
                       help="xor key to use")
     (options, args) = parser.parse_args()
 
-    best_score = {'score':0, 'message':'', 'key':''} # Keep score of most likely encrypted message line
     # Read command line parameter specifying challenge file
     challenge_filename = options.challenge_filename
     xor_key = options.key
