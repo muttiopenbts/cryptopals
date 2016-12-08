@@ -24,7 +24,7 @@ import string
 import itertools
 import operator
 script_path = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(os.path.join(script_path, '../libs'))
+sys.path.append(os.path.join(script_path, '..','libs'))
 import freqAnalysis
 import difflib
 import copy
@@ -257,7 +257,7 @@ def get_guessed_keysize(decoded_b64_challenge):
     edit_distance_list = {}
     guessed_keysize = 0
     bar = progressbar.ProgressBar(max_value=max_keysize)
- 
+
     for keysize in range(min_keysize, max_keysize):
         bar.update(keysize)
 
@@ -339,7 +339,7 @@ def main(options,args):
     # then they need to be split in pairs like 'ab' 'af' '41'
     if is_hex_string(decoded_b64_challenge):
         single_key_byte_blocks = convert_hexstring_to_key_blocks(decoded_b64_challenge, guessed_keysize)
-    else:        
+    else:
         single_key_byte_blocks = convert_bytes_to_key_blocks(decoded_b64_challenge, guessed_keysize)
 
     decrypted_key_byte_blocks = []
