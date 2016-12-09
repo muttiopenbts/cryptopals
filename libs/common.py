@@ -1,3 +1,5 @@
+import itertools
+
 '''
 Test if passed param is hex represented string.
 e.g. 'a0afa19d'
@@ -83,3 +85,38 @@ def generate_patterns():
         print cipher_text_hexstring
         cipher_text_binary = get_binary_from_hexstring(cipher_text_hexstring)
         print cipher_text_binary
+
+
+# s1, s2 should be binary sequences
+def hammingDistance(s1, s2):
+    """Return the Hamming distance between equal-length sequences"""
+    if len(s1) != len(s2):
+        raise ValueError("Undefined for sequences of unequal length {}:{}, {}:{}".format(len(s1),s1,len(s2),s2))
+    return sum(el1 != el2 for el1, el2 in zip(s1, s2))
+
+def levenshtein(s1, s2):
+    if len(s1) < len(s2):
+        return levenshtein(s2, s1)
+
+    # len(s1) >= len(s2)
+    if len(s2) == 0:
+        return len(s1)
+
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1 # j+1 instead of j since previous_row and current_row are one character longer
+            deletions = current_row[j] + 1       # than s2
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+
+    return previous_row[-1]
+
+
+def grouper(iterable, n, fillvalue=None):
+    "Collect data into fixed-length chunks or blocks"
+    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
+    args = [iter(iterable)] * n
+    return itertools.izip_longest(*args, fillvalue=fillvalue)
