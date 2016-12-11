@@ -1,5 +1,9 @@
 '''
+sh-3.2$ echo "YELLOW SUBMARINE" |xxd
+00000000: 5945 4c4c 4f57 2053 5542 4d41 5249 4e45  YELLOW SUBMARINE
+
 Typical use:
+$ python 10.py -m d -k '59454c4c4f57205355424d4152494e45' -i '00000000000000000000000000000000' -f 10.txt
 '''
 from __future__ import print_function
 from pwn import *

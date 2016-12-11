@@ -18,24 +18,128 @@ import numpy
 import re
 import progressbar
 import common
+import os
+from Crypto.Cipher import AES
+from collections import Counter
+
+
+'''
+Python recommended way to obtain random bytes.
+'''
+def get_random_byte_string(size):
+    return os.urandom(size)
+
+
+'''
+Simple xor wrapper.
+param message and iv must match size.
+Expect message and iv to be byte stream. e.g. ('ABC','\x04\x05\x06')
+'''
+def get_iv_xor(message, iv):
+    if len(message) != len(iv):
+        raise Exception('Message and IV mismatch length {} {}'.format(len(message),len(iv)))
+    else:
+        return xor(message,iv)
+
+
+'''
+Encrypt message using AES in cbc mode.
+Params message, key, and iv expect to be byte stream format. e.g. ('AA','ZW','\x03\x22')
+Returns cipher text.
+'''
+def aes_cbc_encrypt(message, key, iv):
+    ciphertext = ''
+    key_size = len(key)
+
+    # Break byte string up into even sized blocks
+    for block in common.grouper(message,key_size,fillvalue='\x00'):
+        block = ''.join(block) # Convert grouper array into byte string
+        ciphertext_cbc = do_aes_cbc_encrypt_chain(block, key, iv)
+        iv = ciphertext_cbc
+        ciphertext += ciphertext_cbc
+
+    return ciphertext
+
+
+'''
+Decrypt message using AES in cbc mode.
+Params cipher text, key, and iv expect to be byte stream format. e.g. ('AA','ZW','\x03\x22')
+Returns plain text.
+'''
+def aes_cbc_decrypt(message, key, iv):
+    key_size = len(key)
+    round = 0
+    previous_cipher_block = ''
+    plaintext = ''
+
+    for cipher_block in common.grouper(message,key_size,fillvalue='\x00'):
+        cipher_block = ''.join(cipher_block) # Convert grouper array into byte string
+
+        # First round of chain uses the specified iv instead of previous decrypted block
+        if round == 0:
+            plaintext_block = do_aes_cbc_decrypt_chain(cipher_block, key, iv)
+        else:
+            iv = previous_cipher_block
+            plaintext_block = do_aes_cbc_decrypt_chain(cipher_block, key, iv)
+
+        previous_cipher_block = cipher_block # This is needed for next round iv
+        plaintext += plaintext_block
+        round += 1
+
+    return plaintext
+
+
+'''
+Perform a single chain round for aes_cbc_encrypt mode.
+A single aes cbc round consists of, aes_ecb(xor(pt,iv), key)
+'''
+def do_aes_cbc_encrypt_chain(message, key, iv):
+    # AES object. Will be used multiple times
+    encobj = AES.new(key, AES.MODE_ECB)
+
+    message = get_iv_xor(message,iv)
+    message = encobj.encrypt(message)
+    return message
+
+
+'''
+Perform a single chain round for aes_cbc_decrypt mode.
+A single aes cbc round consists of, xor(aes_ecb(cipher, key),iv)
+'''
+def do_aes_cbc_decrypt_chain(message, key, iv):
+    # AES object. Will be used multiple times
+    encobj = AES.new(key, AES.MODE_ECB)
+
+    message = encobj.decrypt(message)
+    message = get_iv_xor(message,iv)
+    return message
+
 
 '''
 PKCS#7 padding function.
-Pass param message which will have padding appended to and keysize.
+Pass param message which will have padding appended to as keysize.
 '''
 def set_padding(plaintext, key_size):
     key_size = int(key_size)
     padded_message = '' # padded message to return
+    print('keysize '+str(key_size))
+    print('plain size '+str(len(plaintext)))
+    if key_size < len(plaintext):
+        if key_size == len(plaintext): # Do nothing
+            padded_message = plaintext
 
-    if key_size > 256:
-        raise Exception('PKCS#7 restricts padding to no greater than 256')
-    elif key_size > len(plaintext):
-        size_diff = key_size - len(plaintext)
-        padded_message = '{}{}'.format(plaintext, chr(size_diff) * size_diff)
-    elif key_size == len(plaintext):
-        padded_message = plaintext
-    else:
-        raise Exception('Plaintext larger than keysize')
+        # Pad plaintext to multiple of key size
+        remaining_padding_size = len(plaintext) % key_size
+        if remaining_padding_size == key_size or remaining_padding_size == 0: # Do nothing because it fits
+            padded_message = plaintext
+
+        print ('remain '+str(remaining_padding_size))
+        padding_size = key_size - remaining_padding_size
+        print ('padding '+str(padding_size))
+        if padding_size > 256:
+            raise Exception('Padding size cannot be greater than 256 as per PKCS#7 standard')
+        padded_message = '{}{}'.format(plaintext, chr(padding_size) * padding_size)
+
     return padded_message
 
 
@@ -72,7 +176,7 @@ def crack_xor_message_dictionary(message):
             best_score = score
 
     return cracked_message
-    
+
 
 '''
 Attempt to crack message with single byte xor key.
@@ -185,3 +289,24 @@ def get_guessed_keysize(decoded_b64_challenge):
     bar.finish()
 
     return guessed_keysize
+
+'''
+Attept to detect if cipher text block was encrypted in ecb mode.
+Param ciphertext expected to be byte string.
+Returns dictionary of cipher blocks with count as array.
+e.g. [[{'\x08d\x9a\xf7\r\xc0oO\xd5\xd2\xd6\x9ctL\xd2\x83': 4}]] 
+'''
+def is_ecb_mode(ciphertext, key_size=16):
+    print ('Key size: {}'.format(key_size))
+
+    # Break cipher into key sized blocks and store each block as array elem
+    cipher_blocks = [b for cipher_block in common.grouper(ciphertext,key_size) for b in [''.join(cipher_block)]]
+
+    # Get count of all similar cipher blocks
+    matched_blocks = [{byte:count} for byte,count in Counter(cipher_blocks).items() if count>1]
+
+    # Total up all matched cipher blocks
+    total_blocks_match = sum([count for byte in matched_blocks for count in byte.values()])
+
+    print ('Number of cipher blocks with match were {}, and total matched bytes {}'.format(len(matched_blocks),total_blocks_match))
+    return matched_blocks
