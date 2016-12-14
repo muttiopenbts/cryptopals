@@ -114,31 +114,47 @@ def do_aes_cbc_decrypt_chain(message, key, iv):
     message = get_iv_xor(message,iv)
     return message
 
+'''
+Perform aes in ecb mode with 128 bit key.
+Does padding.
+'''
+def aes_128_ecb(plaintext, key):
+    block_size = 16 # bytes
+    key_size = len(key)
+
+    encobj = AES.new(key, AES.MODE_ECB)
+    # Pad plaintext
+    plaintext = set_padding(plaintext,block_size)
+    #hexdump(plaintext)
+    cipher_text = encobj.encrypt(plaintext)
+    return cipher_text
+
 
 '''
 PKCS#7 padding function.
-Pass param message which will have padding appended to as keysize.
+Pass param message which will have padding appended to as block size.
+# Block size is usually 8 or 16 bytes, I believe.
 '''
-def set_padding(plaintext, key_size):
-    key_size = int(key_size)
+def set_padding(plaintext, block_size=8):
     padded_message = '' # padded message to return
-    print('keysize '+str(key_size))
-    print('plain size '+str(len(plaintext)))
-    if key_size < len(plaintext):
-        if key_size == len(plaintext): # Do nothing
-            padded_message = plaintext
+    #print('Block size: '+str(block_size))
+    #print('Text size: '+str(len(plaintext)))
 
-        # Pad plaintext to multiple of key size
-        remaining_padding_size = len(plaintext) % key_size
-        if remaining_padding_size == key_size or remaining_padding_size == 0: # Do nothing because it fits
+    if block_size < len(plaintext):
+        if block_size == len(plaintext): # Do nothing
             padded_message = plaintext
-
-        print ('remain '+str(remaining_padding_size))
-        padding_size = key_size - remaining_padding_size
-        print ('padding '+str(padding_size))
-        if padding_size > 256:
-            raise Exception('Padding size cannot be greater than 256 as per PKCS#7 standard')
-        padded_message = '{}{}'.format(plaintext, chr(padding_size) * padding_size)
+        else:
+            # Pad plaintext to multiple of key size
+            remaining_padding_size = len(plaintext) % block_size
+            if remaining_padding_size == block_size or remaining_padding_size == 0: # Do nothing because it fits
+                padded_message = plaintext
+            else:
+                #print ('Remaining size: '+str(remaining_padding_size))
+                padding_size = block_size - remaining_padding_size
+                #print ('Padding size: '+str(padding_size))
+                if padding_size > 256:
+                    raise Exception('Padding size cannot be greater than 256 as per PKCS#7 standard')
+                padded_message = '{}{}'.format(plaintext, chr(padding_size) * padding_size)
 
     return padded_message
 
@@ -294,10 +310,10 @@ def get_guessed_keysize(decoded_b64_challenge):
 Attept to detect if cipher text block was encrypted in ecb mode.
 Param ciphertext expected to be byte string.
 Returns dictionary of cipher blocks with count as array.
-e.g. [[{'\x08d\x9a\xf7\r\xc0oO\xd5\xd2\xd6\x9ctL\xd2\x83': 4}]] 
+e.g. [[{'\x08d\x9a\xf7\r\xc0oO\xd5\xd2\xd6\x9ctL\xd2\x83': 4}]]
 '''
 def is_ecb_mode(ciphertext, key_size=16):
-    print ('Key size: {}'.format(key_size))
+    #print ('Key size: {}'.format(key_size))
 
     # Break cipher into key sized blocks and store each block as array elem
     cipher_blocks = [b for cipher_block in common.grouper(ciphertext,key_size) for b in [''.join(cipher_block)]]
@@ -308,5 +324,5 @@ def is_ecb_mode(ciphertext, key_size=16):
     # Total up all matched cipher blocks
     total_blocks_match = sum([count for byte in matched_blocks for count in byte.values()])
 
-    print ('Number of cipher blocks with match were {}, and total matched bytes {}'.format(len(matched_blocks),total_blocks_match))
+    #print ('Number of cipher blocks with match were {}, and total matched blocks {}'.format(len(matched_blocks),total_blocks_match))
     return matched_blocks

@@ -1,4 +1,22 @@
 import itertools
+import os
+import sys
+script_path = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(os.path.join(script_path, '..','libs'))
+import subprocess
+
+
+def get_random_sentences(text_size=16):
+    sentences = ''
+    generator_script_path = os.path.join(script_path, '..','libs','markov-sentence-generator')
+    generator_script = os.path.join(generator_script_path, 'sentence-generator.py')
+    book = os.path.join(generator_script_path,'peter-pan.txt')
+
+    while len(sentences) <= text_size:
+        sentences += subprocess.check_output( [generator_script, book, '5'] )
+    # Truncate message to size if over
+    return sentences[:text_size]
+
 
 '''
 Test if passed param is hex represented string.
