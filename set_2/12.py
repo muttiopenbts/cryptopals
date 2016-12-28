@@ -28,13 +28,13 @@ import subprocess
 def do_ecb_byte_decryption(plaintext,key):
     guessed_block_size = do_guess_ecb_block_size(plaintext,key)
     plaintext_size = len(plaintext)
-    ''' 
+    '''
     custome_block size = 8
     unknown_message size = 8
     Custom block-1 + unknown_message
     'AAAAAAAA'
     '12345678'
-    test_case = 'AAAAAAA'+'1'+'2345678'+'01'           
+    test_case = 'AAAAAAA'+'1'+'2345678'+'01'
     '''
     guessed_unknown_message_hexstring = ''
 

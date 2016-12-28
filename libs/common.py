@@ -6,6 +6,11 @@ sys.path.append(os.path.join(script_path, '..','libs'))
 import subprocess
 
 
+def    remove_ascii_non_printable(str):
+      """Removes Non-printable chars from ASCII String"""
+      return ''.join([ch for ch in str if ord(ch) > 31 and ord(ch) < 126 or ord(ch) == 9])
+
+
 def get_random_sentences(text_size=16):
     sentences = ''
     generator_script_path = os.path.join(script_path, '..','libs','markov-sentence-generator')

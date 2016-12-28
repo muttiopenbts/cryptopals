@@ -1,5 +1,7 @@
-from pwn import *
-# Use this hexdump lib because pwntools hexdump is too slow
+'''
+pytest used for unit testing.
+Use this hexdump lib because pwntools hexdump is too slow
+'''
 from hexdump import *
 import binascii
 import enchant
@@ -9,6 +11,7 @@ import editdistance
 import string
 import itertools
 import operator
+import os
 script_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(script_path, '.'))
 import freqAnalysis
@@ -18,13 +21,13 @@ import numpy
 import re
 import progressbar
 import common
-import os
 from Crypto.Cipher import AES
 from collections import Counter
 
 
 '''
 Python recommended way to obtain random bytes.
+Specify parameter size in bytes.
 '''
 def get_random_byte_string(size):
     return os.urandom(size)
@@ -117,8 +120,9 @@ def do_aes_cbc_decrypt_chain(message, key, iv):
 '''
 Perform aes in ecb mode with 128 bit key.
 Does padding.
+Block size hardcoded to 16 bytes.
 '''
-def aes_128_ecb(plaintext, key):
+def do_aes_128_ecb(plaintext, key):
     block_size = 16 # bytes
     key_size = len(key)
 
@@ -128,6 +132,27 @@ def aes_128_ecb(plaintext, key):
     #hexdump(plaintext)
     cipher_text = encobj.encrypt(plaintext)
     return cipher_text
+
+
+'''
+Perform aes decryption in ecb mode.
+Returns plaintext.
+'''
+def do_aes_128_ecb_decryption(ciphertext, key):
+    key_size = len(key)
+
+    decobj = AES.new(key, AES.MODE_ECB)
+    plaintext = decobj.decrypt(ciphertext)
+    return plaintext
+
+
+'''
+Perform aes in ecb mode with 128 bit key.
+Does padding.
+Block size hardcoded to 16 bytes.
+'''
+def aes_128_ecb(plaintext, key):
+    return do_aes_128_ecb(plaintext, key)
 
 
 '''
@@ -326,3 +351,64 @@ def is_ecb_mode(ciphertext, key_size=16):
 
     #print ('Number of cipher blocks with match were {}, and total matched blocks {}'.format(len(matched_blocks),total_blocks_match))
     return matched_blocks
+
+
+'''
+This is an exercise to detect the block size used in aes ecb encryption.
+'''
+def test_guess_ecb_block_size():
+    aes_key = get_random_byte_string(128/8)
+    assert guess_ecb_block_size(do_aes_128_ecb, aes_key, 'my plaintext') == 16, 'Something wrong with ecb block size'
+
+def guess_ecb_block_size(encryption_func, key, plaintext):
+    BYTE = 8
+    MULTIPLES = 32 / BYTE # bits
+    MIN_KEY_SIZE =  128 / BYTE  # bits. aes spec
+    MAX_KEY_SIZE = 256 / BYTE  # bits. aes spec
+    MIN_BLOCK_SIZE  = 128 / BYTE
+    MAX_BLOCK_SIZE  = 256 / BYTE # Not sure this is allowed in aes spec
+
+    for guessed_block_size in range(MIN_BLOCK_SIZE, (MAX_BLOCK_SIZE + 1)*2):
+        guessed_block = 'A'*guessed_block_size
+        message = guessed_block + plaintext
+        cipher_text = encryption_func(message, key)
+
+        if is_ecb_mode(cipher_text):
+            guessed_block_size = guessed_block_size / 2
+            #print ('AES ECB mode detected and block size is {}'.format(guessed_block_size))
+            return guessed_block_size
+
+
+'''
+From set 2 challenge 12
+'''
+def ecb_byte_decryption(plaintext,key):
+    guessed_block_size = guess_ecb_block_size(plaintext,key)
+    plaintext_size = len(plaintext)
+    '''
+    custom_block size = 8
+    unknown_message size = 8
+    Custom block-1 + unknown_message
+    'AAAAAAAA'
+    '12345678'
+    test_case = 'AAAAAAA'+'1'+'2345678'+'01'
+    '''
+    guessed_unknown_message_hexstring = ''
+
+    while len(plaintext) / float(guessed_block_size) > 0:
+        guessed_unknown_message_hexstring_block = ''
+        for block_size in reversed(range(0,guessed_block_size)): # Create list [15,14...0]
+            custom_base_block = 'A' * block_size # This block will decrease in size with each correct match
+            custom_block = custom_base_block + unhex(guessed_unknown_message_hexstring_block)
+            guessed_blocks = [custom_block+str(chr(guessed_byte)) for guessed_byte in range(0,256)]
+            for guessed_block in guessed_blocks:
+                # If we have hit the correct guessed block then we should detect ecb mode because duplicate blocks
+                #hexdump(guessed_block + custom_base_block + plaintext)
+                bruteforce_guess = common_crypt.aes_128_ecb(guessed_block + custom_base_block + plaintext, key)
+                if common_crypt.is_ecb_mode(bruteforce_guess):
+                    guessed_unknown_message_hexstring_block += chr(guessed_blocks.index(guessed_block)).encode('hex')
+                    #print(guessed_unknown_message_hexstring_block)
+                    break
+        guessed_unknown_message_hexstring += guessed_unknown_message_hexstring_block
+        plaintext = plaintext[guessed_block_size:]
+    return unhex(guessed_unknown_message_hexstring)
